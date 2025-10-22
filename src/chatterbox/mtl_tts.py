@@ -8,7 +8,9 @@ import perth
 import torch.nn.functional as F
 from safetensors.torch import load_file as load_safetensors
 from huggingface_hub import snapshot_download
-
+from io import BytesIO
+from pydub import AudioSegment
+from hashlib import sha256
 from .models.t3 import T3
 from .models.t3.modules.t3_config import T3Config
 from .models.s3tokenizer import S3_SR, drop_invalid_tokens
@@ -150,6 +152,8 @@ class ChatterboxMultilingualTTS:
         self.tokenizer = tokenizer
         self.device = device
         self.conds = conds
+        self.conds_cache = {}
+        self.conds_cache_limit = 1024
         self.watermarker = perth.PerthImplicitWatermarker()
 
     @classmethod
@@ -203,10 +207,8 @@ class ChatterboxMultilingualTTS:
         )
         return cls.from_local(ckpt_dir, device)
     
-    def prepare_conditionals(self, wav_fpath, exaggeration=0.5):
+    def prepare_conditionals(self, s3gen_ref_wav, exaggeration=0.5):
         ## Load reference wav
-        s3gen_ref_wav, _sr = librosa.load(wav_fpath, sr=S3GEN_SR)
-
         ref_16k_wav = librosa.resample(s3gen_ref_wav, orig_sr=S3GEN_SR, target_sr=S3_SR)
 
         s3gen_ref_wav = s3gen_ref_wav[:self.DEC_COND_LEN]
@@ -228,13 +230,13 @@ class ChatterboxMultilingualTTS:
             cond_prompt_speech_tokens=t3_cond_prompt_tokens,
             emotion_adv=exaggeration * torch.ones(1, 1, 1),
         ).to(device=self.device)
-        self.conds = Conditionals(t3_cond, s3gen_ref_dict)
+        return Conditionals(t3_cond, s3gen_ref_dict)
 
     def generate(
         self,
         text,
         language_id,
-        audio_prompt_path=None,
+        audio_prompt_wav_bytes=None,
         exaggeration=0.5,
         cfg_weight=0.5,
         temperature=0.8,
@@ -249,9 +251,17 @@ class ChatterboxMultilingualTTS:
                 f"Unsupported language_id '{language_id}'. "
                 f"Supported languages: {supported_langs}"
             )
-        
-        if audio_prompt_path:
-            self.prepare_conditionals(audio_prompt_path, exaggeration=exaggeration)
+
+        if audio_prompt_wav_bytes != None:
+            audio_prompt_hash = sha256(audio_prompt_wav_bytes).hexdigest()
+            if audio_prompt_hash in self.conds_cache:
+                self.conds = self.conds_cache[audio_prompt_hash]
+            else:
+                self.conds = self.prepare_conditionals(audio_prompt_wav_bytes, exaggeration=exaggeration)
+                if len(self.conds_cache) >= self.conds_cache_limit:
+                    old_conds = self.conds_cache.pop(next(iter(self.conds_cache)))
+                    del old_conds
+                self.conds_cache[audio_prompt_hash] = self.conds
         else:
             assert self.conds is not None, "Please `prepare_conditionals` first or specify `audio_prompt_path`"
 
@@ -297,5 +307,4 @@ class ChatterboxMultilingualTTS:
                 ref_dict=self.conds.gen,
             )
             wav = wav.squeeze(0).detach().cpu().numpy()
-            watermarked_wav = self.watermarker.apply_watermark(wav, sample_rate=self.sr)
-        return torch.from_numpy(watermarked_wav).unsqueeze(0)
+        return wav
