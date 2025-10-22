@@ -286,7 +286,7 @@ class ChatterboxMultilingualTTS:
 
         with torch.inference_mode():
             speech_tokens = self.t3.inference(
-                t3_cond=self.conds.t3,
+                t3_cond=self.conds.t3.detach().clone(),
                 text_tokens=text_tokens,
                 max_new_tokens=1000,  # TODO: use the value in config
                 temperature=temperature,
@@ -304,7 +304,7 @@ class ChatterboxMultilingualTTS:
 
             wav, _ = self.s3gen.inference(
                 speech_tokens=speech_tokens,
-                ref_dict=self.conds.gen,
+                ref_dict=self.conds.gen.detach().clone(),
             )
             wav = wav.squeeze(0).detach().cpu().numpy()
         return wav
