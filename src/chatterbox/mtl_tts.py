@@ -274,6 +274,7 @@ class ChatterboxMultilingualTTS:
             self.last_audio_prompt_hash = audio_prompt_hash
         elif self.last_audio_prompt_hash:
             self.conds = self.conds_cache[self.last_audio_prompt_hash]
+            print("Using last cached conditionals for audio prompt.")
         else:
             assert self.conds is not None, "Please `prepare_conditionals` first or specify `audio_prompt_path`"
 
