@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from safetensors.torch import load_file as load_safetensors
 from huggingface_hub import snapshot_download
 from io import BytesIO
-from pydub import AudioSegment
+import torchaudio as ta
 from hashlib import sha256
 from .models.t3 import T3
 from .models.t3.modules.t3_config import T3Config
@@ -209,6 +209,12 @@ class ChatterboxMultilingualTTS:
     
     def prepare_conditionals(self, s3gen_ref_wav, exaggeration=0.5):
         ## Load reference wav
+        s3gen_ref_wav, sr = ta.load(BytesIO(s3gen_ref_wav))
+        s3gen_ref_wav = s3gen_ref_wav.squeeze().cpu().numpy()
+        
+        # Resample to target sample rate if needed (like librosa.load does by default)
+        if sr != S3GEN_SR:
+            s3gen_ref_wav = librosa.resample(s3gen_ref_wav, orig_sr=sr, target_sr=S3GEN_SR)
         ref_16k_wav = librosa.resample(s3gen_ref_wav, orig_sr=S3GEN_SR, target_sr=S3_SR)
 
         s3gen_ref_wav = s3gen_ref_wav[:self.DEC_COND_LEN]
