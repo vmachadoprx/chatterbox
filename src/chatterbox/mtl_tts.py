@@ -10,6 +10,7 @@ from safetensors.torch import load_file as load_safetensors
 from huggingface_hub import snapshot_download
 from io import BytesIO
 import torchaudio as ta
+import tempfile
 from hashlib import sha256
 from .models.t3 import T3
 from .models.t3.modules.t3_config import T3Config
@@ -207,14 +208,15 @@ class ChatterboxMultilingualTTS:
         )
         return cls.from_local(ckpt_dir, device)
     
-    def prepare_conditionals(self, s3gen_ref_wav, exaggeration=0.5):
+    def prepare_conditionals(self, orig_wav, exaggeration=0.5):
         ## Load reference wav
-        s3gen_ref_wav, sr = ta.load(BytesIO(s3gen_ref_wav))
-        s3gen_ref_wav = s3gen_ref_wav.squeeze().cpu().numpy()
-        
-        # Resample to target sample rate if needed (like librosa.load does by default)
-        if sr != S3GEN_SR:
-            s3gen_ref_wav = librosa.resample(s3gen_ref_wav, orig_sr=sr, target_sr=S3GEN_SR)
+        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp_wav_file:
+            tmp_wav_file.write(orig_wav)
+            tmp_wav_file.flush()
+            wav_fpath = tmp_wav_file.name
+
+            # Load and resample
+            s3gen_ref_wav, _sr = librosa.load(wav_fpath, sr=S3GEN_SR)
         ref_16k_wav = librosa.resample(s3gen_ref_wav, orig_sr=S3GEN_SR, target_sr=S3_SR)
 
         s3gen_ref_wav = s3gen_ref_wav[:self.DEC_COND_LEN]
