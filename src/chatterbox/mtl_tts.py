@@ -8,8 +8,7 @@ import perth
 import torch.nn.functional as F
 from safetensors.torch import load_file as load_safetensors
 from huggingface_hub import snapshot_download
-from io import BytesIO
-import torchaudio as ta
+import copy
 import tempfile
 from hashlib import sha256
 from .models.t3 import T3
@@ -294,7 +293,7 @@ class ChatterboxMultilingualTTS:
 
         with torch.inference_mode():
             speech_tokens = self.t3.inference(
-                t3_cond=self.conds.t3.detach().clone(),
+                t3_cond=copy.deepcopy(self.conds.t3),
                 text_tokens=text_tokens,
                 max_new_tokens=1000,  # TODO: use the value in config
                 temperature=temperature,
@@ -312,7 +311,7 @@ class ChatterboxMultilingualTTS:
 
             wav, _ = self.s3gen.inference(
                 speech_tokens=speech_tokens,
-                ref_dict=self.conds.gen.detach().clone(),
+                ref_dict=copy.deepcopy(self.conds.gen),
             )
             wav = wav.squeeze(0).detach().cpu().numpy()
         return wav
