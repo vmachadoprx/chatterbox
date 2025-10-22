@@ -155,6 +155,7 @@ class ChatterboxMultilingualTTS:
         self.conds_cache = {}
         self.conds_cache_limit = 1024
         self.watermarker = perth.PerthImplicitWatermarker()
+        self.last_audio_prompt_hash = None
 
     @classmethod
     def get_supported_languages(cls):
@@ -263,12 +264,16 @@ class ChatterboxMultilingualTTS:
             audio_prompt_hash = sha256(audio_prompt_wav_bytes).hexdigest()
             if audio_prompt_hash in self.conds_cache:
                 self.conds = self.conds_cache[audio_prompt_hash]
+                print("Using cached conditionals for audio prompt.")
             else:
                 self.conds = self.prepare_conditionals(audio_prompt_wav_bytes, exaggeration=exaggeration)
                 if len(self.conds_cache) >= self.conds_cache_limit:
                     old_conds = self.conds_cache.pop(next(iter(self.conds_cache)))
                     del old_conds
                 self.conds_cache[audio_prompt_hash] = self.conds
+            self.last_audio_prompt_hash = audio_prompt_hash
+        elif self.last_audio_prompt_hash:
+            self.conds = self.conds_cache[self.last_audio_prompt_hash]
         else:
             assert self.conds is not None, "Please `prepare_conditionals` first or specify `audio_prompt_path`"
 
