@@ -149,7 +149,7 @@ class S3Token2Mel(torch.nn.Module):
             ref_speech_token_lens[0] = ref_speech_tokens.shape[1]
 
         return dict(
-            prompt_token=ref_speech_tokens.to(device),
+            prompt_token=ref_speech_tokens.to(device).contiguous(),
             prompt_token_len=ref_speech_token_lens,
             prompt_feat=ref_mels_24,
             prompt_feat_len=ref_mels_24_len,
