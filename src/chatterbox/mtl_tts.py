@@ -153,7 +153,7 @@ class ChatterboxMultilingualTTS:
         self.device = device
         self.conds = conds
         self.conds_cache = {}
-        self.conds_cache_limit = 32
+        self.conds_cache_limit = 512
         #self.watermarker = perth.PerthImplicitWatermarker()
         self.last_audio_prompt_hash = None
 
